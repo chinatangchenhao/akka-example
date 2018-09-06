@@ -74,6 +74,7 @@ ppt图1-4
   1.定义Actor
         继承UntypedActor
   2.创建Actor示例
+       注意：禁止new对象,Actor作为核心执行的单元，具有并行运行和分布式的特点，为了屏蔽实现细节，简化调用方式，统一资源调配和层级管理，需要通过Akka提供的API来创建Actor
   3.发送接受消息
         tell
 		ask
