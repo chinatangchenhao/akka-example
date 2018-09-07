@@ -45,5 +45,3 @@ class ActorDemo extends UntypedActor {
         }
     }
 }
-
-
