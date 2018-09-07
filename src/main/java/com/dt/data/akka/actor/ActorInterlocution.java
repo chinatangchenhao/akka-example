@@ -26,7 +26,7 @@ public class ActorInterlocution {
         // ask
         // 设置超时时间
         Timeout timeout = new Timeout(Duration.create(2, "seconds"));
-        // 模拟发送一个消息(异步)
+        // 模拟发送一个请求消息(异步)
         Future<Object> f = Patterns.ask(ask_ar, "Where are you doing now?", timeout);
         System.out.println("ask......");
         // 拿到返回结果
@@ -47,7 +47,7 @@ class AskActorDemo extends UntypedActor {
     @Override
     public void onReceive(Object message) {
         if (message instanceof String) {
-            // 请求
+            // 接受请求
             System.out.println("发送者是：" + getSender() + " 发送消息：" + message); // getSender方法可以获得发送方
             // 响应
             getSender().tell("I'm coding!", getSelf()); //getSelf方法可以获得Actor自己
