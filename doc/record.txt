@@ -75,15 +75,108 @@ ppt图1-4
         继承UntypedActor
   2.创建Actor示例
        注意：禁止new对象,Actor作为核心执行的单元，具有并行运行和分布式的特点，为了屏蔽实现细节，简化调用方式，统一资源调配和层级管理，需要通过Akka提供的API来创建Actor
+       【示例】：UntypedActorCreator.java
   3.发送接受消息
-        tell
-		ask
+        tell：发送消息立即结束
+		ask：发送消息异步获得响应  示例：ActorInterlocution.java
+		forward：消息转发        示例：ActorForwardMessage.java
   4.查找Actor
+        图2-9
+        示例：ActorFind.java
   5.停止Actor
+        当我们不在需要某个Actor时，可以采取下面的方式进行停止：
+        （1）调用ActorSystem或者getContext()的stop方法。
+        （2）给Actor发送一个PoisonPill（毒丸）消息。
+        （3）给Actor发送一个Kill消息，此时会抛出ActorKilledException异常，并上报到父级supervise处理。
+        示例：ActorStop
+
+        靠谱的流程：
+        (1)当停止Actor时，正在处理的消息会在完全停止之前处理完成，后续信息将不再进行处理，邮箱也会被挂起
+        (2)给所有子级Actor发送终止命令，当子级都停止后，在停自己，停止会调用postStop方法，在这里可以清理或释放资源
+        (3)向生命周期监控着(DeathWatch)发送Terminated消息，以便监控者做响应的处理
+
+        注意：为了能让子Actor失败之后能响应给自己的父级，需要在父Actor中对自己的子级进行监控，只需要在父级的preStart方法中调用watch方法即可
+             当子Actor失败时会自动向自己监控着发送Terminated消息。
+        示例：ActorTerminate
 
 3.MailBox
+    提示疑问：Akka以消息为载体入参和SpringMVC中一个Controller中的Method接受入参有区别吗？
+
+    在给一个Actor发送消息时，并不是依赖API之间的传参，而会先把消息发送到Actor的邮箱中，然后Actor会从自己的邮箱中读取这些消息。
+
+    Actor中的邮箱本质是一个队列结构，所有到达Actor的消息都会在队列里面进行排队，默认的方式是FIFO，当然也可以自定义邮箱和消息队列的处理方式。
+
+    3.1 消息的顺序性
+        （1）当一个Actor接受来自不同Actor的消息，Actor不能保证某个消息一定排在另一个的前面或者后面。
+        （2）从同一个Actor发送过来的多个消息，可以保证是串行的顺序。
+    3.2 邮箱默认配置
+        akka.actor.default-mailbox {
+            mailbox-type = "akka.dispatch.UnboundeMailbox"
+            mailbox-capacity = 1000
+            mailbox-push-timeout-time = 10s
+        }
+
+        参数说明：
+        [mailbox-type] 邮箱类型，分为有界和无界，Akka默认为UnboundMailbox，不限制邮箱大小
+        [mailbox-capacity] 邮箱容量，只对于有界邮箱有效
+        [mailbox-push-timeout-time] 如队列超时时间，指push一个消息到有界邮箱的队列超时时间。配置为复负数表示无线超时
+
+     3.3 内置邮箱
+         表4-1
+
+         例子：（1）自定义优先级
+                   继承PriorityMailbox重写优先级规则
+                   示例：MailboxPriorityCustom
+
+               (2) 控制指令优先，如何让消息具有更高的优先级？
+                   ①配置邮箱类型为：UnboundedControlAwareMailbox
+                   ②将消息实现ControlMessage接口
+                   示例：MailboxControlWare
+
+     3.4 自定义邮箱类型
+         步骤：1.自定义邮箱队列（实现MessageQueue接口）
+              2.自定义邮箱类型（实现MailboxType接口），并指定邮箱队列
+              3.配置邮箱类型，绑定到Actor中
+         示例：MailboxTypeCustom
+
 4.Router
+   tell ask forward只能实现简单的消息投机逻辑，但是如果想实现复杂的消息投机逻辑怎么办呢？
+
+   Router：路由器，消息会进入路由器中然后在发送出去，相当于消息的中转站。
+   Routee：路由目标，从路由器中发送出去的消息会到达对应的路由目标
+   投递策略：轮询，随机，广播
+
+   图例5-1
+
+   示例：实现轮询投递
+
+   4.1 路由Actor
+   路由器可以是一个自包含的Actor，它通常管理者自己所有的Routee。
+   一般来说，我们会把这类路由配置在*.conf文件中，然后通过编码的方式加载并创建路由器。
+
+   创建路由Actor的两种方式：
+   （1）Pool
+       路由器Actor会创建子Actor作为其Routee并对它们进行监督和监控，当某个Routee终止时将其移除出去。
+
+       示例：RoutingPool
+
+   （2）Group
+       可以将Routee的产生方式放在外部，然后路由器Actor通过路径path对这些路由目标发送消息。
+
+       示例：RoutingGroup
+
+   4.2 常见路由类型：表5-1
+
 5.Akka Stream
+  Akka Stream是建立在Actor模型之上的，它可以将所有的处理过程抽象成异步+并行执行的函数，数据将会在函数内流动并得到处理。
+
+  1.Stream组件
+    （1）Source:产生一个输出，它的下游在处理时会接受它的数据。
+    （2）Sink：需要一个输入，它通常是流动处理的左后一个阶段。
+    （3）Flow：拥有一个输入和输出，它包含一些类似集合的操作，可以做数据转换加载等操作。
+    （4）RunnableGraph：当你拥有Source和Sink等结构后，还需要将它们链接在一起形成一个pipeline，需要这样一个对象执行计算图。
+
+
 6.Akka HTTP
   请求/响应
   HTTP客户端
