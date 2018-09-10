@@ -176,9 +176,84 @@ ppt图1-4
     （3）Flow：拥有一个输入和输出，它包含一些类似集合的操作，可以做数据转换加载等操作。
     （4）RunnableGraph：当你拥有Source和Sink等结构后，还需要将它们链接在一起形成一个pipeline，需要这样一个对象执行计算图。
 
+     一个简单的例子：StreamExample
+
+  2.构建Source
+    例子：StreamSourceExample
+  3.构建Sink
+    例子：StreamSinkExample
+  3.构建Flow
+    图6-2
+    例子：StreamFlowExample
 
 6.Akka HTTP
-  请求/响应
-  HTTP客户端
-  Routing DSL
-  Directive
+  1.相关组件
+    (1)HttpRequest:
+       表示一个HTTP请求，可以通过HttpRequest.create静态方法创建
+    (2)HttpResponse:
+       表示一个HTTP响应，可以通过HttpResponse.create静态方法创建
+    (3)HttpEntity:
+       表示请求和响应中携带的数据，比如：HttpEntity.Strict(简单类型，一般在已知Content-Length,并且数据量不大的时候使用)，
+       HttpEntity.Chunked(使用分块的方式进行数据传输，它会将header中的Transfer-Encoding设置为chunked)等
+    (4)Header:
+       当Akka HTTP服务器接受到请求后，会解析所有的header，例如Conten-Length，Content-Type，User-Agent。
+
+  2.HTTP服务端
+    Akka HTTP是建立在Stream基础之上，很多操作都被抽象成Stream中的组件的数据流操作。
+    基本思路：启动Akka HTTP服务之后，他会从Source中读取链接对象并交给Sink进行处理，得到链接对象之后
+             将其分配给Flow中去进行HttpRequest和HttpResponse相关操作。
+    例子：HttpServer
+
+  3.请求和响应
+    Sink.foreach里面得到了每个来访的IncomingConnection对象，该对象拥有一系列方法可以用于处理请求。
+    比较重要两个是下面两个：
+    (1)handleWith:需要一个Flow<HttpRequest,HttpResponse,Mat>组件来定义处理逻辑
+    (2)handleWithSyncHandler:需要一个Flow<HttpRequest,HttpResponse>组件来定义处理逻辑
+    例子：HttpRequestHandle
+
+  4.HTTP客户端
+    Akka HTTP也提供了API用于向服务端发送请求，相当于http-client。
+    例子：HttpClient
+
+  5.Routing DSL
+    两个核心组件：
+    (1)Route:用于匹配和处理请求的函数，它会返回一个RouteResult用来描述可能的结果
+    (2)Directive:用于创建和组装多个Route。
+    例子：RoutingDSLExample
+
+  6.Directive
+    (1)HeaderDirectives
+       HeaderDirectives.headerValueByName可以通过名字获取header信息，比如浏览器相关信息：
+       path("category", () -> headerValueByName("User-Agent", u -> comlete("获取header" + u)))
+    (2)PathDirectives
+       PathDirectives.pathSingleSlash可以匹配首页路径，即"/"
+       pathSingleSlas(() -> complete("默认首页"))
+
+       PathDirectives.path 可以匹配指定路径，比如"/index"
+       path("index", () -> complete("欢迎来到首页"))
+
+    (3)ParameterDirectives
+       ParameterDirectives.parameter可以获取查询字符串中的参数，第一个参数（name）表示字符串参数名
+       path("searchBook", () -> parameter("name", name -> complete("查询书名:" + name)))
+
+       ParameterDirectives.parameterMap以Map的格式获取所有查询字符串参数
+       path("searchBookBy", () -> parameterMap(p -> {
+           return omplete("书名:" + p.get("name") + ", 价格:" + p.get("price"));
+       }))
+
+       测试URL：searchBookByname=akka&price=100
+
+    (4)FormFieldDirectives
+       FormFieldDirectives.formFieldMap会以map格式获取所有method为post的form表单值
+       path("addBook", () -> formFieldMap(form -> {
+           return complete("提交参数："+form);
+       }))
+
+    (5)RouteDirectives
+       RouteDirectives.redirect可以产生一个重定向响应
+       path("redirect_to", () -> redirect(Uri.create("/index"), StatusCodes.FOUND))
+
+
+
+
+
